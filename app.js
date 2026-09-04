@@ -1,6 +1,11 @@
 /* Soundboard — vanilla JS, no dependencies.
  * Config lives in sounds.json. Audio files live in ./sounds/.
- * All paths are relative so this works from a GitHub Pages subpath. */
+ * All paths are relative so this works from a GitHub Pages subpath.
+ *
+ * Playback uses the Web Audio API: each file is fetched + decoded once into an
+ * in-memory AudioBuffer, so triggering a pad is near-instant (no per-click
+ * network/decode lag). Decoding happens lazily in the background after load,
+ * keeping the initial page load fast even with many sounds. */
 
 (() => {
   "use strict";
@@ -17,8 +22,6 @@
 
   /** @type {Array<{label:string,file:string,category:string,id:string}>} */
   let sounds = [];
-  /** id -> HTMLAudioElement (lazily created) */
-  const audioCache = new Map();
   /** id -> pad button element */
   const padEls = new Map();
 
@@ -26,53 +29,126 @@
   let searchTerm = "";
   let volume = parseFloat(volumeEl.value);
 
-  /* ---------- Audio ---------- */
+  /* ---------- Web Audio engine ---------- */
 
-  function getAudio(sound) {
-    let audio = audioCache.get(sound.id);
-    if (!audio) {
-      audio = new Audio();
-      // Lazy: only set src (and start network fetch) on first play.
-      audio.preload = "none";
-      audio.src = SOUNDS_DIR + encodeURIComponent(sound.file);
-      audio.volume = volume;
-      audio.addEventListener("ended", () => setPlaying(sound.id, false));
-      audio.addEventListener("pause", () => {
-        // treat a pause at start as stopped
-        if (audio.currentTime === 0) setPlaying(sound.id, false);
-      });
-      audio.addEventListener("error", () => {
-        setPlaying(sound.id, false);
-        console.error("Failed to load audio:", sound.file);
-      });
-      audioCache.set(sound.id, audio);
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let ctx = null;
+  let masterGain = null;
+  /** id -> AudioBuffer */
+  const buffers = new Map();
+  /** id -> Promise<AudioBuffer> (in-flight loads, deduped) */
+  const loading = new Map();
+  /** id -> Set<AudioBufferSourceNode> currently playing (allows layering) */
+  const active = new Map();
+
+  function ensureContext() {
+    if (!ctx && AudioCtx) {
+      ctx = new AudioCtx();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = volume;
+      masterGain.connect(ctx.destination);
     }
-    return audio;
+    // Browsers start the context suspended until a user gesture.
+    if (ctx && ctx.state === "suspended") ctx.resume();
+    return ctx;
   }
 
-  function play(sound) {
-    const audio = getAudio(sound);
-    audio.volume = volume;
-    // Restart if already playing; layering across *different* sounds is allowed.
-    audio.currentTime = 0;
-    const p = audio.play();
-    if (p && typeof p.catch === "function") {
-      p.catch((err) => console.warn("Playback blocked:", err));
-    }
+  function urlFor(sound) {
+    return SOUNDS_DIR + encodeURIComponent(sound.file);
+  }
+
+  /** Fetch + decode a sound into an AudioBuffer (cached, deduped). */
+  function loadBuffer(sound) {
+    if (buffers.has(sound.id)) return Promise.resolve(buffers.get(sound.id));
+    if (loading.has(sound.id)) return loading.get(sound.id);
+
+    const p = fetch(urlFor(sound))
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((data) => {
+        ensureContext();
+        // decodeAudioData works while the context is suspended.
+        return ctx.decodeAudioData(data);
+      })
+      .then((buf) => {
+        buffers.set(sound.id, buf);
+        loading.delete(sound.id);
+        return buf;
+      })
+      .catch((err) => {
+        loading.delete(sound.id);
+        console.error("Failed to load audio:", sound.file, err);
+        throw err;
+      });
+
+    loading.set(sound.id, p);
+    return p;
+  }
+
+  function startBuffer(sound, buf) {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(masterGain);
+    if (!active.has(sound.id)) active.set(sound.id, new Set());
+    const set = active.get(sound.id);
+    set.add(src);
+    src.onended = () => {
+      set.delete(src);
+      if (set.size === 0) setPlaying(sound.id, false);
+    };
+    src.start(0);
     setPlaying(sound.id, true);
   }
 
-  function stopAll() {
-    for (const audio of audioCache.values()) {
-      audio.pause();
-      audio.currentTime = 0;
+  function play(sound) {
+    ensureContext();
+    // Restart this sound if it's already playing (different sounds still layer).
+    stop(sound.id);
+
+    const cached = buffers.get(sound.id);
+    if (cached) {
+      startBuffer(sound, cached); // instant path
+    } else {
+      loadBuffer(sound)
+        .then((buf) => startBuffer(sound, buf))
+        .catch(() => setPlaying(sound.id, false));
     }
-    for (const id of padEls.keys()) setPlaying(id, false);
+  }
+
+  function stop(id) {
+    const set = active.get(id);
+    if (!set) return;
+    for (const src of set) {
+      try { src.onended = null; src.stop(); } catch (_) {}
+    }
+    set.clear();
+    setPlaying(id, false);
+  }
+
+  function stopAll() {
+    for (const id of active.keys()) stop(id);
   }
 
   function setPlaying(id, isPlaying) {
     const pad = padEls.get(id);
     if (pad) pad.classList.toggle("playing", isPlaying);
+  }
+
+  /** Warm the buffer cache in the background so first clicks are instant. */
+  function prefetchAll() {
+    const queue = sounds.slice();
+    const step = () => {
+      const s = queue.shift();
+      if (!s) return;
+      loadBuffer(s).catch(() => {}).finally(() => schedule(step));
+    };
+    const schedule = (fn) =>
+      "requestIdleCallback" in window
+        ? requestIdleCallback(fn, { timeout: 500 })
+        : setTimeout(fn, 60);
+    schedule(step);
   }
 
   /* ---------- Rendering ---------- */
@@ -85,7 +161,6 @@
 
   function renderTabs() {
     const cats = categories();
-    // Hide tabs entirely if everything is uncategorized into a single bucket.
     if (cats.length <= 2 && cats[1] === "Uncategorized") {
       tabsEl.hidden = true;
       return;
@@ -121,10 +196,13 @@
     pad.type = "button";
     pad.textContent = sound.label;
     pad.title = sound.label;
+    // Warm this sound the moment the user shows intent, so click is instant.
+    const warm = () => loadBuffer(sound).catch(() => {});
+    pad.addEventListener("pointerenter", warm);
+    pad.addEventListener("pointerdown", warm);
     pad.addEventListener("click", () => {
       pad.classList.remove("flash");
-      // reflow to restart animation
-      void pad.offsetWidth;
+      void pad.offsetWidth; // reflow to restart animation
       pad.classList.add("flash");
       play(sound);
     });
@@ -147,7 +225,6 @@
       return;
     }
 
-    // Group by category (unless a single category is already selected).
     const groups = new Map();
     for (const s of list) {
       if (!groups.has(s.category)) groups.set(s.category, []);
@@ -190,11 +267,10 @@
       const data = await res.json();
       const arr = Array.isArray(data) ? data : data.sounds;
       if (!Array.isArray(arr)) throw new Error("sounds.json must be an array or { sounds: [...] }");
-      sounds = arr
-        .filter((s) => s && s.file)
-        .map(normalize);
+      sounds = arr.filter((s) => s && s.file).map(normalize);
       renderTabs();
       renderBoard();
+      prefetchAll();
     } catch (err) {
       statusEl.textContent = `Could not load sounds.json — ${err.message}`;
       statusEl.classList.add("error");
@@ -211,12 +287,11 @@
 
   volumeEl.addEventListener("input", () => {
     volume = parseFloat(volumeEl.value);
-    for (const audio of audioCache.values()) audio.volume = volume;
+    if (masterGain) masterGain.gain.value = volume;
   });
 
   stopAllEl.addEventListener("click", stopAll);
 
-  // Keyboard: Escape stops everything.
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") stopAll();
   });
