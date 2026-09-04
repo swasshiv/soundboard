@@ -1,8 +1,5 @@
 {
   "sounds": [
-    { "label": "Ding",  "file": "ding.wav",  "category": "Alerts" },
-    { "label": "Boop",  "file": "boop.wav",  "category": "Effects" },
-    { "label": "Chime", "file": "chime.wav", "category": "Alerts" },
     { "label": "Fah", "file": "fah.mp3", "category": "Memes" },
     { "label": "Vine Thud", "file": "vine-thud.mp3", "category": "Memes" },
     { "label": "Oh Hell Nah", "file": "oh-hell-nah.mp3", "category": "Memes" },
