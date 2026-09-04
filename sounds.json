@@ -1,0 +1,7 @@
+{
+  "sounds": [
+    { "label": "Ding",  "file": "ding.wav",  "category": "Alerts" },
+    { "label": "Boop",  "file": "boop.wav",  "category": "Effects" },
+    { "label": "Chime", "file": "chime.wav", "category": "Alerts" }
+  ]
+}
