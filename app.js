@@ -43,6 +43,13 @@
 
   function ensureContext() {
     if (!ctx && AudioCtx) {
+      // On iOS, Web Audio defaults to the "ambient" channel, which the physical
+      // silent switch mutes. Declaring playback intent routes it to the media
+      // channel instead, so sound plays regardless of the mute switch (Safari
+      // 16.4+). Harmless / ignored where the Audio Session API is unavailable.
+      try {
+        if (navigator.audioSession) navigator.audioSession.type = "playback";
+      } catch (_) {}
       ctx = new AudioCtx();
       masterGain = ctx.createGain();
       masterGain.gain.value = volume;
