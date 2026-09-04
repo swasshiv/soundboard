@@ -1,15 +1,15 @@
 {
   "sounds": [
-    { "label": "Fah", "file": "fah.mp3", "category": "Memes" },
-    { "label": "Vine Thud", "file": "vine-thud.mp3", "category": "Memes" },
-    { "label": "Oh Hell Nah", "file": "oh-hell-nah.mp3", "category": "Memes" },
-    { "label": "Kai Cenat Sus", "file": "kai-cenat-sus.mp3", "category": "Memes" },
-    { "label": "Ehhhhhh", "file": "ehhh.mp3", "category": "Memes" },
-    { "label": "Bass Drop", "file": "bass-drop.mp3", "category": "Effects" },
-    { "label": "EDP Bell", "file": "edp-bell.mp3", "category": "Effects" },
-    { "label": "Fahhh", "file": "fahhh.mp3", "category": "Memes" },
-    { "label": "Get Out", "file": "get-out.mp3", "category": "Memes" },
-    { "label": "Say Wallahi Bro", "file": "say-wallahi-bro.mp3", "category": "Memes" },
-    { "label": "Cursed Plankton", "file": "cursed-plankton.mp3", "category": "Memes" }
+    { "label": "Fah", "file": "fah.mp3" },
+    { "label": "Vine Thud", "file": "vine-thud.mp3" },
+    { "label": "Oh Hell Nah", "file": "oh-hell-nah.mp3" },
+    { "label": "Sus", "file": "kai-cenat-sus.mp3" },
+    { "label": "Ehhhhhh", "file": "ehhh.mp3" },
+    { "label": "Bass Drop", "file": "bass-drop.mp3" },
+    { "label": "EDP Bell", "file": "edp-bell.mp3" },
+    { "label": "Fahhh", "file": "fahhh.mp3" },
+    { "label": "Get Out", "file": "get-out.mp3" },
+    { "label": "Say Wallahi Bro", "file": "say-wallahi-bro.mp3" },
+    { "label": "Moan", "file": "cursed-plankton.mp3" }
   ]
 }
