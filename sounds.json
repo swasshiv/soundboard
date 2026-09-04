@@ -8,6 +8,8 @@
     { "label": "Bass Drop", "file": "bass-drop.mp3", "category": "Effects" },
     { "label": "EDP Bell", "file": "edp-bell.mp3", "category": "Effects" },
     { "label": "Fahhh", "file": "fahhh.mp3", "category": "Memes" },
-    { "label": "Get Out", "file": "get-out.mp3", "category": "Memes" }
+    { "label": "Get Out", "file": "get-out.mp3", "category": "Memes" },
+    { "label": "Say Wallahi Bro", "file": "say-wallahi-bro.mp3", "category": "Memes" },
+    { "label": "Cursed Plankton", "file": "cursed-plankton.mp3", "category": "Memes" }
   ]
 }
